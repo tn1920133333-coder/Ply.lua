@@ -1,0 +1,227 @@
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+
+local speed = 100
+local jump = 100
+local flySpeed = 100
+local flying = false
+
+local bv, bg, flyConnection
+
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "FlyMenu"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+-- Nút mở/đóng
+local openButton = Instance.new("TextButton")
+openButton.Size = UDim2.fromOffset(45, 40)
+openButton.Position = UDim2.fromOffset(15, 150)
+openButton.BackgroundColor3 = Color3.new(0, 0, 0)
+openButton.TextColor3 = Color3.new(1, 1, 1)
+openButton.Text = "☰"
+openButton.TextSize = 24
+openButton.Font = Enum.Font.GothamBold
+openButton.Parent = gui
+
+-- Menu
+local frame = Instance.new("Frame")
+frame.Size = UDim2.fromOffset(235, 205)
+frame.Position = UDim2.fromOffset(15, 150)
+frame.BackgroundColor3 = Color3.new(0, 0, 0)
+frame.BorderSizePixel = 0
+frame.Parent = gui
+
+-- Bo góc
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = frame
+
+local function label(text, y)
+	local l = Instance.new("TextLabel")
+	l.Size = UDim2.fromOffset(100, 35)
+	l.Position = UDim2.fromOffset(10, y)
+	l.BackgroundTransparency = 1
+	l.Text = text
+	l.TextColor3 = Color3.new(1, 1, 1)
+	l.TextSize = 16
+	l.Font = Enum.Font.GothamBold
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.Parent = frame
+	return l
+end
+
+local function input(default, y)
+	local box = Instance.new("TextBox")
+	box.Size = UDim2.fromOffset(105, 32)
+	box.Position = UDim2.fromOffset(115, y)
+	box.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	box.TextColor3 = Color3.new(1, 1, 1)
+	box.PlaceholderColor3 = Color3.fromRGB(180, 180, 180)
+	box.Text = tostring(default)
+	box.TextSize = 16
+	box.Font = Enum.Font.GothamBold
+	box.ClearTextOnFocus = false
+	box.Parent = frame
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 5)
+	c.Parent = box
+
+	return box
+end
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 35)
+title.BackgroundTransparency = 1
+title.Text = "✈ FLY MENU"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.TextSize = 20
+title.Font = Enum.Font.GothamBold
+title.Parent = frame
+
+label("Tốc chạy", 42)
+local speedBox = input(100, 42)
+
+label("Nhảy cao", 80)
+local jumpBox = input(100, 80)
+
+label("Tốc bay", 118)
+local flyBox = input(100, 118)
+
+local flyButton = Instance.new("TextButton")
+flyButton.Size = UDim2.fromOffset(215, 35)
+flyButton.Position = UDim2.fromOffset(10, 160)
+flyButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+flyButton.TextColor3 = Color3.new(1, 1, 1)
+flyButton.Text = "FLY: OFF"
+flyButton.TextSize = 17
+flyButton.Font = Enum.Font.GothamBold
+flyButton.Parent = frame
+
+local bc = Instance.new("UICorner")
+bc.CornerRadius = UDim.new(0, 5)
+bc.Parent = flyButton
+
+-- Giới hạn 1-1000
+local function getValue(box, current)
+	local value = tonumber(box.Text)
+	if not value then
+		box.Text = tostring(current)
+		return current
+	end
+
+	value = math.clamp(value, 1, 1000)
+	box.Text = tostring(value)
+	return value
+end
+
+speedBox.FocusLost:Connect(function()
+	speed = getValue(speedBox, speed)
+
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		hum.WalkSpeed = speed
+	end
+end)
+
+jumpBox.FocusLost:Connect(function()
+	jump = getValue(jumpBox, jump)
+
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		hum.UseJumpPower = true
+		hum.JumpPower = jump
+	end
+end)
+
+flyBox.FocusLost:Connect(function()
+	flySpeed = getValue(flyBox, flySpeed)
+end)
+
+-- Fly
+local function stopFly()
+	flying = false
+	flyButton.Text = "FLY: OFF"
+
+	if flyConnection then
+		flyConnection:Disconnect()
+		flyConnection = nil
+	end
+
+	if bv then bv:Destroy(); bv = nil end
+	if bg then bg:Destroy(); bg = nil end
+end
+
+local function startFly()
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+
+	flying = true
+	flyButton.Text = "FLY: ON"
+
+	bv = Instance.new("BodyVelocity")
+	bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+	bv.Velocity = Vector3.zero
+	bv.Parent = root
+
+	bg = Instance.new("BodyGyro")
+	bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+	bg.P = 10000
+	bg.Parent = root
+
+	flyConnection = RunService.RenderStepped:Connect(function()
+		if not flying or not root.Parent then
+			stopFly()
+			return
+		end
+
+		local camera = workspace.CurrentCamera
+		local move = Vector3.zero
+
+		if UIS:IsKeyDown(Enum.KeyCode.W) then
+			move += camera.CFrame.LookVector
+		end
+		if UIS:IsKeyDown(Enum.KeyCode.S) then
+			move -= camera.CFrame.LookVector
+		end
+		if UIS:IsKeyDown(Enum.KeyCode.A) then
+			move -= camera.CFrame.RightVector
+		end
+		if UIS:IsKeyDown(Enum.KeyCode.D) then
+			move += camera.CFrame.RightVector
+		end
+		if UIS:IsKeyDown(Enum.KeyCode.Space) then
+			move += Vector3.yAxis
+		end
+		if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
+			move -= Vector3.yAxis
+		end
+
+		bv.Velocity = move.Magnitude > 0
+			and move.Unit * flySpeed
+			or Vector3.zero
+
+		bg.CFrame = camera.CFrame
+	end)
+end
+
+flyButton.MouseButton1Click:Connect(function()
+	if flying then
+		stopFly()
+	else
+		startFly()
+	end
+end)
+
+-- Đóng / mở
+openButton.MouseButton1Click:Connect(function()
+	frame.Visible = not frame.Visible
+end)
